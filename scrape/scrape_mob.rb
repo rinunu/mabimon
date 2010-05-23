@@ -54,9 +54,7 @@ end
 
 # 「Top > モンスター > データベース」 ページを解析し、解析結果を返す
 # 結果は [{:category => カテゴリ, :family => 種族, :url => url}, ...]
-def parse_index(url)
-  page = get_html(url)
-  
+def parse_index(page)
   # カテゴリ一覧
   heads = page.search("#body h2, #body h3").sort.reverse
   heads.pop # 「目次」を取り除く
@@ -373,7 +371,7 @@ def save_all(index)
     category_mobs << mobs
   end
   
-  save_category_csv category, category_mobs
+  save_category_csv category_path, category_mobs
 end
 
 # ----------------------------------------------------------------------
@@ -382,7 +380,7 @@ end
 unless $page
   # ----------
   # 全部ガッツリ処理する場合
-  index = parse_index(root)
+  index = parse_index(get_html(root))
   save_all(index)
 else
 
