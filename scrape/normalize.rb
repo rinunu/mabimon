@@ -5,13 +5,6 @@
 #
 # 
 #
-# TODO
-# - 氷の魔女
-# - 音の空き瓶
-# - 赤/青のたま系
-# - エンチャントのフォーマット統一
-# - 数値に MR:2560 とか入ってる
-# - $skip_mobs してる子
 
 require "jcode"
 require "pathname"
@@ -20,7 +13,7 @@ require "pathname"
 # 設定
 
 # 名称リストから未使用の名称を削除するなら true
-$clean_names = false
+$clean_names = true
 
 # 読み込む CSV
 $source_path = Pathname.new("mobs") + "すべて.csv"
@@ -70,7 +63,9 @@ require "filter"
 # - 前後のスペースを削除
 class BasicFilter < ValueFilter
   def process(column, value)
-    value.tr("（）？　／", "()? /").gsub("??", "?").gsub("(?)", "?").strip
+    value.tr("（）？　／－", "()? /ー").gsub("??", "?").
+      gsub(/[～〜]/, "~").
+      gsub("(?)", "?").strip
   end
 end
 
@@ -161,7 +156,7 @@ end
 class NumberFilter < ValueFilter
   def process(column, value)
     old = value
-    value = value.gsub(/[-～〜\/]/, "~").gsub("、", "")
+    value = value.gsub(/[-\/]/, "~").gsub("、", "")
     
     # アバウトな感じ?
     original = value
