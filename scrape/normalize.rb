@@ -116,10 +116,15 @@ class NameFilter < ValueFilter
   end
 
   def process(column, value)
-    name = @names.get_standard_name value
-    return name if name
-    @names.add value
-    return value
+    value2 = @names.get_standard_name value
+    unless value2
+      @names.add value
+      return value
+    end
+
+    return nil if value2 == "<delete>"
+    
+    return value2
   end
 end
 
@@ -166,21 +171,18 @@ class NumberFilter < ValueFilter
     about = value != original
 
     if ["", "~"].any? {|a| a == value}
-      value = UNKNOWN
+      return UNKNOWN
     else
       if value =~ /^[0-9\.\~]+$/
         value += "?" if about
+        return value
       else
-        if about
-          value = UNKNOWN
-        else
-          raise "解析失敗 #{old}"
-        end
+        return UNKNOWN if about
+        raise "解析失敗 #{old}"
       end
     end
-    
-    "#{old} => #{value}"
   end
+
 end
 
 class Attack < ValueFilter
@@ -272,8 +274,22 @@ $columns = [
             :sketch_exp
            ]
 
+$output_columns = $columns
+
 # ----------------------------------------------------------------------
-# 実行！
+# デバッグ
+
+# 各カラムの編集前の値を複製して保存しておく(比較用)
+class BackupFilter
+  def process(object)
+    result = {}
+    for key, value in object
+      result[key] = value
+      result[:"#{key}_before"] = value
+    end
+    result
+  end
+end
 
 class Logger
   def initialize(columns)
@@ -285,11 +301,23 @@ class Logger
   end
 end
 
+# ----------------------------------------------------------------------
+# 実行！
+
+# デバッグ用に加工前データも出力する
+if true
+  $output_columns = []
+  for column in $columns
+    $output_columns << column
+    $output_columns << :"#{column}_before"
+  end
+end
+
 require "my_csv"
 input = CsvReader.new $source_path, $columns
-output = CsvWriter.new $result_path, $columns, $columns
+output = CsvWriter.new $result_path, $output_columns, $output_columns
 
-filters = ListFilter.new [input, Logger.new([:name]), $mob_filter, Logger.new([:dungeons]), output]
+filters = ListFilter.new [input, BackupFilter.new, Logger.new([:name]), $mob_filter, Logger.new([:dungeons]), output]
 
 while true
   begin

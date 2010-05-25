@@ -65,6 +65,9 @@ class ColumnFilter
     else
       value = @filter.process(column, value)
     end
+
+    value.compact if value.is_a? Array
+    
     object[column] = value
   end
 end
@@ -73,7 +76,7 @@ end
 class ValueFilter
   # value を加工して返す
   # 配列を返した場合、カラムには配列が入る
-  # todo ハッシュを返した場合、それぞれのキーに対応するカラムに値が格納される
+  # カラムが配列の場合、 nil を返すと配列から取り除かれる
   def process(column, value)
   end
 end
