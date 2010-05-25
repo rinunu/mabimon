@@ -1,0 +1,7 @@
+マビノギモンスター DB 用のツール
+
+1. scrape_mob.rb
+Maginogi Wiki のモンスター情報を CSV で保存するツール
+
+2. normalize.rb
+モンスター情報の保存された CSV のデータを正規化するツール
