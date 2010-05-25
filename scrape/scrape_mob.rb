@@ -135,9 +135,9 @@ class ListColumnParser < DefaultColumnParser
 end
 
 $column_parsers = [
-                   ListColumnParser.new(:fields, "フィールド",
+                   DefaultColumnParser.new(:fields, "フィールド",
                                            :required => false),
-                   ListColumnParser.new(:dungeons, "ダンジョン",
+                   DefaultColumnParser.new(:dungeons, "ダンジョン",
                                            :required => false),
                    DefaultColumnParser.new(:life, "生命力"),
                    DefaultColumnParser.new(:attack, ["攻撃力", "攻撃"]),
@@ -151,15 +151,15 @@ $column_parsers = [
                    DefaultColumnParser.new(:is_first_attack, "先/後"),
                    DefaultColumnParser.new(:search_speed, "認識速度",
                                            :required => false),
-                   ListColumnParser.new(:skills, "スキル"),
+                   DefaultColumnParser.new(:skills, "スキル"),
                    DefaultColumnParser.new(:exp, "経験値"),
-                   ListColumnParser.new(:items, /ドロップアイテム/,
+                   DefaultColumnParser.new(:items, /ドロップアイテム/,
                                         :required => false),
                    DefaultColumnParser.new(:elemental, "エレメンタル"),
                    DefaultColumnParser.new(:tactics, ["攻略", "攻略法"],
                                            :required => false),
                    DefaultColumnParser.new(:information, "情報"),
-                   ListColumnParser.new(:titles, "タイトル",
+                   DefaultColumnParser.new(:titles, "タイトル",
                                            :required => false),
                    DefaultColumnParser.new(:sketch_exp, "スケッチによる探険経験値", 
                                            :required => false)
@@ -279,10 +279,7 @@ $column_names = [
                  "エレメンタル",
                  "攻略法",
                  "情報",
-                 "タイトル1",
-                 "タイトル2",
-                 "タイトル3",
-                 "タイトル4",
+                 "タイトル",
                  "スケッチによる探検経験値",
            ]
 
@@ -301,16 +298,10 @@ def mobs_to_csv(mobs)
     a = []
     for column in $columns
       value = mob[column]
-      if column == :titles
-        value = value[0..3]
-        value.fill("", value.size..3) if value.size < 4
-        a += value.map{|a| escape_csv a}
-      else
-        if value.is_a? Array
-          value = value.join("\n")
-        end
-        a << escape_csv(value)
+      if value.is_a? Array
+        value = value.join("\n")
       end
+      a << escape_csv(value)
     end
     result << a.join(",")
   end
