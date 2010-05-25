@@ -6,6 +6,7 @@
 # = ファイルフォーマット
 # - CSV。 第1カラムが正式名称、それ以降のカラムは正式ではない名前
 # - 正式名称が <delete> の場合、その名称は未使用
+# - 正式名称が複数ある場合、 「|」で区切る
 class Names
   
   def initialize(path)
@@ -28,12 +29,17 @@ class Names
 
   # 正式名称を取得する
   # 存在しない場合は nil
-  def get_standard_name(name)
+  # name が使用されていない場合はからのリスト
+  def get_standard_names(name)
     @used_names[name] = true
-    @name_hash[name]
+    names = @name_hash[name]
+    return nil unless names
+    return [] if names == "<delete>"
+    names.split("|")
   end
 
   def add(name)
+    raise "name" unless name
     puts "add: #{name}"
     @name_hash[name] = name
   end

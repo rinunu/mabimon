@@ -116,15 +116,15 @@ class NameFilter < ValueFilter
   end
 
   def process(column, value)
-    value2 = @names.get_standard_name value
-    unless value2
+    raise "value" unless value
+    names = @names.get_standard_names value
+    unless names
       @names.add value
       return value
     end
 
-    return nil if value2 == "<delete>"
-    
-    return value2
+    return nil if names.empty?
+    return names
   end
 end
 
@@ -201,11 +201,36 @@ class SkipMobsFilter
   end
 end
 
+# ベース/サンライト/マナハーブ みたいなのを分解する
+class SuffixFilter
+  def initialize(suffix)
+    @suffix = suffix
+  end
+  
+  def process(column, value)
+    raise "value" unless value
+    if value =~ /^(.*)#@suffix$/
+      value.split("/").map do |a|
+        if a.include? @suffix
+          a
+        else
+          a + @suffix
+        end
+      end
+    else
+      value
+    end
+  end  
+end
+
 split = SplitFilter.new
 split_space = SplitFilter.new(/[、,，\s・\/]\s*/) # スペースでも名前を分割する
+split_items = SplitFilter.new(/[、,，\n・]\s*/)
 paren = ParenthesesFilter.new
 clean = RemoveFilter.new [/^期間：.*/]
 number = NumberFilter.new
+herb = SuffixFilter.new("ハーブ")
+elemental = SuffixFilter.new("エレメンタル")
 
 def names(column) NameFilter.new($names_hash[column]) end
 def gsub(pattern, replace) GsubFilter.new(pattern, replace) end
@@ -236,7 +261,7 @@ $mob_filter = FilterBuilder.new.
 
   # エンチャなどがあるので paren はすべきじゃない
   column(:items, [gsub(/['`"](.+?)['`"]音の空き瓶/, '音の空き瓶(\1)'),
-                  split, names(:items)]).
+                  split_items, herb, elemental, names(:items)]).
   column(:elemental, [names(:elemental)]).
   column(:tactics, []).
   column(:information, []).
