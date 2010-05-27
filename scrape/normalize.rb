@@ -27,6 +27,8 @@ UNKNOWN = "★不明"
 $skip_mobs = ["ゴースト", "サルファーゴーレム", "スモールゴーレム(初級)", "スモールゴーレム", 
               "スモールゴーレム(強化)"]
 
+$debug = true
+
 # ----------------------------------------------------------------------
 # 名称リスト
 #
@@ -80,7 +82,7 @@ class ParenthesesFilter < ValueFilter
     if /(.+?)\((.+?)\)/ =~ value
       prefix = $1
       list = $2.split(",")
-      if !list.empty?
+      if list.size >= 2
         return list.map{|a| prefix + a}
       end
     end
@@ -386,12 +388,16 @@ end
 # 実行！
 
 # デバッグ用に加工前データも出力する
-if true
+if $debug
   tmp = []
   for column in $output_columns
-    if column == :attack_max
+    case column
+    when :attack_max
       # 無視
-    elsif column == :attack_min
+    when :name, :family
+      # 加工しないので加工前はいらない
+      tmp << column
+    when :attack_min
       tmp << :"attack(加工前)"
       tmp << :attack_min
       tmp << :attack_max
