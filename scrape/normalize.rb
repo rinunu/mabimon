@@ -224,11 +224,26 @@ class MinMaxFilter
 end
 
 # 経験値を処理する 例: 200(+32)
-class Exp < ValueFilter
-  def initialize(source_column)
+class ExpFilter < ValueFilter
+  def initialize()
   end
   
   def process(value, options)
+    old = value
+    value = value.gsub("、", "").gsub(" ", "")
+    case value
+    when /^([0-9.]+)\(?\+\(?([0-9.]+)\)?$/
+      options[:object][:party_exp] = Float($2)
+      Float($1)
+    when /^([0-9.]+)$/
+      options[:object][:party_exp] = UNKNOWN
+      Float($1)
+    when /[\?]*/
+      options[:object][:party_exp] = UNKNOWN
+      UNKNOWN
+    else
+      raise "Exp 解析失敗 #{old}"
+    end
   end
 end
 
@@ -262,6 +277,7 @@ number = NumberFilter.new
 herb = SuffixFilter.new("ハーブ")
 elemental = SuffixFilter.new("エレメンタル")
 max = MaxFilter.new
+exp = ExpFilter.new
 
 def names(column) NameFilter.new($names_hash[column]) end
 def gsub(pattern, replace) GsubFilter.new(pattern, replace) end
@@ -290,7 +306,7 @@ $mob_filter = FilterBuilder.new.
   column(:is_first_attack, [names(:is_first_attack)]).
   column(:search_speed, [names(:search_speed)]).
   column(:skills, [split_space, names(:skills)]).
-  column(:exp, []).
+  column(:exp, [exp]).
 
   # エンチャなどがあるので paren はすべきじゃない
   column(:items, [gsub(/['`"](.+?)['`"]音の空き瓶/, '音の空き瓶(\1)'),
@@ -351,6 +367,7 @@ $output_columns = [
                    :search_speed,
                    :skills,
                    :exp,
+                   :party_exp,
                    :items,
                    :elemental,
                    :tactics,
@@ -392,15 +409,14 @@ if $debug
   tmp = []
   for column in $output_columns
     case column
-    when :attack_max
-      # 無視
-    when :name, :family
+    when :name, :family, :party_exp, :attack_max
       # 加工しないので加工前はいらない
       tmp << column
+    when :attack_max
+      # 無視
     when :attack_min
       tmp << :"attack(加工前)"
       tmp << :attack_min
-      tmp << :attack_max
     else
       tmp << :"#{column}(加工前)"
       tmp << column
