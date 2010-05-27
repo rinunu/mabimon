@@ -62,7 +62,7 @@ require "filter"
 # - 記号と英数字を全角 => 半角
 # - 前後のスペースを削除
 class BasicFilter < ValueFilter
-  def process(column, value)
+  def process(value, options)
     value.tr("（）？　／－", "()? /ー").gsub("??", "?").
       gsub(/[～〜]/, "~").
       gsub("(?)", "?").strip
@@ -75,7 +75,7 @@ class ParenthesesFilter < ValueFilter
   def initialize()
   end
 
-  def process(column, value)
+  def process(value, options)
     # カッコの中身を抜き出す
     if /(.+?)\((.+?)\)/ =~ value
       prefix = $1
@@ -96,7 +96,7 @@ class SplitFilter < ValueFilter
     @separator = separator
   end
   
-  def process(column, value)
+  def process(value, options)
     # もっと素直にできないかな。。
     
     # すべての区切りを <sep> にする
@@ -115,7 +115,7 @@ class NameFilter < ValueFilter
     @names = names
   end
 
-  def process(column, value)
+  def process(value, options)
     raise "value" unless value
     names = @names.get_standard_names value
     unless names
@@ -135,7 +135,7 @@ class RemoveFilter
     @words = Array(words)
   end
 
-  def process(column, value)
+  def process(value, options)
     for word in @words
       value = value.gsub word, ""
     end
@@ -150,45 +150,44 @@ class GsubFilter
     @replace = replace
   end
 
-  def process(column, value)
+  def process(value, options)
     value.gsub @pattern, @replace
   end
 end
 
-class Exp < ValueFilter
-end
-
+# [0-9]~[0-9] のようなものを処理する
+# 処理結果は {:min, :max} となる
+# 数値が1つしか入っていない場合は :max に設定する
+# 数値が不明な場合は :min, :max は nil
+# 数値がアバウトな場合は、:min, :max の末尾に 「?」をつける
 class NumberFilter < ValueFilter
-  def process(column, value)
+  def process(value, options)
+    result = {:min => nil, :max => nil}
     old = value
     value = value.gsub(/[-\/]/, "~").gsub("、", "")
     
     # アバウトな感じ?
     original = value
-    ["↓", "前後", "約", "推定", /\?/, /くらい/, /^~/, "以下", "以上", "程度", "保護+HS=", "高い"].
+    ["↓", "前後", "約", "推定", /\?/, /くらい/, /^~/, "以下", "以上", "程度", "保護+HS=", "高い", "不明"].
       each {|a| value = value.gsub a, ""}
-    
     about = value != original
 
-    if ["", "~"].any? {|a| a == value}
-      return UNKNOWN
+    case value
+    when "", "~"
+      # 不明
+    when /^([0-9]*)~([0-9]*)$/
+      result[:min], result[:max] = $1, $2
+    when /^([0-9]+)$/
+      result[:max] = $1
     else
-      if value =~ /^[0-9\.\~]+$/
-        value += "?" if about
-        return value
-      else
-        return UNKNOWN if about
-        raise "解析失敗 #{old}"
-      end
+      raise "解析失敗 #{old}" unless about # about の場合は、「不明」とする
     end
+
+    result[:max] = result[:min] if result[:min] && !result[:max]
+    result[:min] += "?" if result[:min] && about
+    result[:max] += "?" if result[:max] && about
+    return result
   end
-
-end
-
-class Attack < ValueFilter
-end
-
-class Gold < ValueFilter
 end
 
 class SkipMobsFilter
@@ -201,13 +200,43 @@ class SkipMobsFilter
   end
 end
 
+# NumberFilter の結果を max のみに変換する
+# 不明な場合は UNKNOWN
+class MaxFilter
+  def process(value, options)
+    raise "value" unless value
+    value[:max] || UNKNOWN
+  end
+end
+
+# NumberFilter の結果をそれぞれのカラムに格納する
+class MinMaxFilter
+  def initialize(min_column, max_column)
+    @min_column = min_column
+    @max_column = max_column
+  end
+  def process(value, options)
+    options[:object][@min_column] = value[:min] || UNKNOWN
+    options[:object][@max_column] = value[:max] || UNKNOWN
+  end
+end
+
+# 経験値を処理する 例: 200(+32)
+class Exp < ValueFilter
+  def initialize(source_column)
+  end
+  
+  def process(value, options)
+  end
+end
+
 # ベース/サンライト/マナハーブ みたいなのを分解する
 class SuffixFilter
   def initialize(suffix)
     @suffix = suffix
   end
   
-  def process(column, value)
+  def process(value, options)
     raise "value" unless value
     if value =~ /^(.*)#@suffix$/
       value.split("/").map do |a|
@@ -227,13 +256,15 @@ split = SplitFilter.new
 split_space = SplitFilter.new(/[、,，\s・\/]\s*/) # スペースでも名前を分割する
 split_items = SplitFilter.new(/[、,，\n・]\s*/)
 paren = ParenthesesFilter.new
-clean = RemoveFilter.new [/^期間：.*/]
 number = NumberFilter.new
 herb = SuffixFilter.new("ハーブ")
 elemental = SuffixFilter.new("エレメンタル")
+max = MaxFilter.new
 
 def names(column) NameFilter.new($names_hash[column]) end
 def gsub(pattern, replace) GsubFilter.new(pattern, replace) end
+def remove(pattern) RemoveFilter.new(pattern) end
+def min_max(min_column, max_column) MinMaxFilter.new(min_column, max_column) end
 
 $mob_filter = FilterBuilder.new.
   filter(SkipMobsFilter.new).
@@ -243,16 +274,16 @@ $mob_filter = FilterBuilder.new.
          # たまに入ってる英語名称を削除
          [gsub(/\([a-zA-Z ]+\)$/, "")]).
   
-  column(:fields, [clean, split_space, paren, names(:fields)]).
-  column(:dungeons, [clean, split, paren, names(:dungeons)]).
-  column(:life, [number]).
-  column(:attack, [number]).
-  column(:gold, []).
+  column(:fields, [remove(/^期間：.*/), split_space, paren, names(:fields)]).
+  column(:dungeons, [remove(/^期間：.*/), split, paren, names(:dungeons)]).
+  column(:life, [number, max]).
+  column(:attack, [number, min_max(:attack_min, :attack_max)]).
+  column(:gold, [remove(/g/i), number, max]).
   column(:is_1for1, [names(:is_1for1)]).
-  column(:defensive, [number]).
+  column(:defensive, [number, max]).
   column(:num_of_attacks, [names(:num_of_attacks)]).
   column(:search_range, [names(:search_range)]).
-  column(:protective, [number]).
+  column(:protective, [number, max]).
   column(:move_speed, [names(:move_speed)]).
   column(:is_first_attack, [names(:is_first_attack)]).
   column(:search_speed, [names(:search_speed)]).
@@ -273,7 +304,7 @@ $mob_filter = FilterBuilder.new.
 # CSV
 
 # カラム名の配列(CSV の順に並んでいる)
-$columns = [
+$input_columns = [
             :family,
             :name,
             :fields,
@@ -299,7 +330,32 @@ $columns = [
             :sketch_exp
            ]
 
-$output_columns = $columns
+$output_columns = [
+                   :family,
+                   :name,
+                   :fields,
+                   :dungeons,
+                   :life,
+                   :attack_min,
+                   :attack_max,
+                   :gold,
+                   :is_1for1,
+                   :defensive,
+                   :num_of_attacks,
+                   :search_range,
+                   :protective,
+                   :move_speed,
+                   :is_first_attack,
+                   :search_speed,
+                   :skills,
+                   :exp,
+                   :items,
+                   :elemental,
+                   :tactics,
+                   :information,
+                   :titles,
+                   :sketch_exp
+                  ]
 
 # ----------------------------------------------------------------------
 # デバッグ
@@ -310,7 +366,7 @@ class BackupFilter
     result = {}
     for key, value in object
       result[key] = value
-      result[:"#{key}_before"] = value
+      result[:"#{key}(加工前)"] = value
     end
     result
   end
@@ -331,15 +387,24 @@ end
 
 # デバッグ用に加工前データも出力する
 if true
-  $output_columns = []
-  for column in $columns
-    $output_columns << column
-    $output_columns << :"#{column}_before"
+  tmp = []
+  for column in $output_columns
+    if column == :attack_max
+      # 無視
+    elsif column == :attack_min
+      tmp << :"attack(加工前)"
+      tmp << :attack_min
+      tmp << :attack_max
+    else
+      tmp << :"#{column}(加工前)"
+      tmp << column
+    end
   end
+  $output_columns = tmp
 end
 
 require "my_csv"
-input = CsvReader.new $source_path, $columns
+input = CsvReader.new $source_path, $input_columns
 output = CsvWriter.new $result_path, $output_columns, $output_columns
 
 filters = ListFilter.new [input, BackupFilter.new, Logger.new([:name]), $mob_filter, Logger.new([:dungeons]), output]

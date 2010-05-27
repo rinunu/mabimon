@@ -55,15 +55,16 @@ class ColumnFilter
   end
 
   def process_column(object, column)
+    options = {:object => object, :column => column}
     value = object[column]
     if value.is_a? Array
       result = []
       for v in value
-        result += Array(@filter.process(column, v))
+        result += Array(@filter.process(v, options))
       end
       value = result
     else
-      value = @filter.process(column, value)
+      value = @filter.process(value, options)
     end
 
     value.compact if value.is_a? Array
@@ -77,7 +78,7 @@ class ValueFilter
   # value を加工して返す
   # 配列を返した場合、カラムには配列が入る
   # カラムが配列の場合、 nil を返すと配列から取り除かれる
-  def process(column, value)
+  def process(value, options)
   end
 end
 
