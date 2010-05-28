@@ -26,7 +26,7 @@ require "kconv"
 # 設定
 
 # スキップする MOB
-$skip_categories = ["影世界"]
+$skip_categories = ["影世界", "節足動物", "鳥類"]
 $skip_families = ["イリアの巨大フィールドボス", "メインストリームボス"]
 $skip_mobs = ["スケルトン(初心者修練用)"]
 

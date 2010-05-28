@@ -101,20 +101,20 @@ UNKNOWN = "★不明"
 # スキップする mob 名
 # 基本的に1つの mob 欄に複数の値が入っているものは解析失敗する
 $skip_mobs = ["ゴースト", "サルファーゴーレム", "スモールゴーレム(初級)", "スモールゴーレム", 
-              "スモールゴーレム(強化)"]
+              "スモールゴーレム(強化)", "巨大赤クモ", "巨大黒クモ", "巨大白クモ"]
 
 $input_dir = Pathname.new("mobs")
 
 # 入力ファイル名
 $input_files = [
-                # "節足動物ＭＯＢＤＢ 1_1Tf.csv",
-                # "鳥類ＭＯＢＤＢ 1_1Tf.csv",
+                "影世界.csv",
+                "節足動物ＭＯＢＤＢ 1_1Tf.csv",
+                "鳥類ＭＯＢＤＢ 1_1Tf.csv",
                 "アンデッド.csv",
                 "ストーン系.csv",
                 "ボスモンスター.csv",
                 "亜人種.csv",
                 "哺乳類.csv",
-                "影世界.csv",
                 "悪魔族.csv",
                 "爬虫類.csv",
                 "魔法生命体.csv"
@@ -160,6 +160,7 @@ $names_list.each {|n| $names_hash[n] = Names.new($names_dir + "#{n}.csv")}
 # - 前後のスペースを削除
 class BasicFilter < ValueFilter
   def process(value, options)
+    raise "value: #{options[:column]}" unless value
     value.tr("（）？　／－", "()? /ー").gsub("??", "?").
       gsub(/[～〜]/, "~").
       gsub("(?)", "?").strip
@@ -391,7 +392,7 @@ $mob_filter = FilterBuilder.new.
   column(:dungeons, [remove(/^期間：.*/), split, paren, names(:dungeons)]).
   column(:life, [number, max]).
   column(:attack, [number, min_max(:attack_min, :attack_max)]).
-  column(:gold, [remove(/g/i), number, max]).
+  column(:gold, [remove(/[gｇＧ]/i), number, max]).
   column(:is_1for1, [names(:is_1for1)]).
   column(:defensive, [number, max]).
   column(:num_of_attacks, [names(:num_of_attacks)]).
@@ -447,13 +448,7 @@ end
 
 filters = ListFilter.new [$input, BackupFilter.new, Logger.new([:name]), $mob_filter, Logger.new([:dungeons]), $output]
 
-while true
-  begin
-    object = filters.process(nil)
-    break unless object
-  rescue Skip
-  end
-end
+FilterRunner.new.run filters
 
 # 名称リストを更新する
 $names_hash.values.each {|a|a.save(:clean => $clean_names)}

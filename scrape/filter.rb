@@ -63,7 +63,7 @@ class ColumnFilter
         result += Array(@filter.process(v, options))
       end
       value = result
-    else
+    elsif value
       value = @filter.process(value, options)
     end
 
@@ -97,6 +97,21 @@ class ConcatFilter
       @sources.shift
     end
     return nil
+  end
+end
+
+# ----------------------------------------------------------------------
+
+class FilterRunner
+  
+  def run(filter)
+    while true
+      begin
+        object = filter.process(nil)
+        break unless object
+      rescue Skip
+      end
+    end
   end
 end
 
