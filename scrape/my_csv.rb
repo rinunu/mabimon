@@ -4,7 +4,10 @@ class CsvReader
   def initialize(path, columns)
     @columns = columns
     require "csv"
-    @reader = CSV.open(path, 'r')
+    require "kconv"
+    open(path, 'r') do |file|
+      @reader = CSV::Reader.create file.read.toutf8
+    end
     @reader.shift # ヘッダー
   end
 
@@ -31,8 +34,9 @@ class CsvWriter
   def initialize(path, header, columns)
     @columns = columns
     require "csv"
+    require "kconv"
     @writer = CSV.open(path, 'w')
-    @writer << header
+    @writer << header.map {|a| a.to_s}
   end
 
   def close()

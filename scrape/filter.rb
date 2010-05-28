@@ -84,6 +84,24 @@ end
 
 # ----------------------------------------------------------------------
 
+# 複数の入力用フィルターを連結する
+class ConcatFilter
+  def initialize(sources)
+    @sources = Array(sources)
+  end
+
+  def process(object)
+    until @sources.empty?
+      result = @sources.first.process(object)
+      return result if result
+      @sources.shift
+    end
+    return nil
+  end
+end
+
+# ----------------------------------------------------------------------
+
 # ListFilter を作成するユーティリティクラス
 class FilterBuilder
   def initialize()

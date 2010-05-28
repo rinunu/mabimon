@@ -8,26 +8,123 @@
 
 require "jcode"
 require "pathname"
+require "filter"
+require "my_csv"
 
 # ----------------------------------------------------------------------
 # 設定
 
+$debug = true
+
+# 入力データのカラム名の配列
+$input_columns = [
+            :family,
+            :name,
+            :fields,
+            :dungeons,
+            :life,
+            :attack,
+            :gold,
+            :is_1for1,
+            :defensive,
+            :num_of_attacks,
+            :search_range,
+            :protective,
+            :move_speed,
+            :is_first_attack,
+            :search_speed,
+            :skills,
+            :exp,
+            :items,
+            :elemental,
+            :tactics,
+            :information,
+            :titles,
+            :sketch_exp
+           ]
+
+# 出力データのカラム名の配列
+$output_columns = [
+                   :family,
+                   :name,
+                   :fields,
+                   :dungeons,
+                   :life,
+                   :attack_min,
+                   :attack_max,
+                   :gold,
+                   :is_1for1,
+                   :defensive,
+                   :num_of_attacks,
+                   :search_range,
+                   :protective,
+                   :move_speed,
+                   :is_first_attack,
+                   :search_speed,
+                   :skills,
+                   :exp,
+                   :party_exp,
+                   :items,
+                   :elemental,
+                   :tactics,
+                   :information,
+                   :titles,
+                   :sketch_exp
+                  ]
+
+# デバッグ用に加工前データも出力する
+if $debug
+  tmp = []
+  for column in $output_columns
+    case column
+    when :name, :family, :party_exp, :attack_max
+      # 加工しないので加工前はいらない
+      tmp << column
+    when :attack_max
+      # 無視
+    when :attack_min
+      tmp << :"attack(加工前)"
+      tmp << :attack_min
+    else
+      tmp << :"#{column}(加工前)"
+      tmp << column
+    end
+  end
+  $output_columns = tmp
+end
+
 # 名称リストから未使用の名称を削除するなら true
-$clean_names = true
-
-# 読み込む CSV
-$source_path = Pathname.new("mobs") + "すべて.csv"
-
-# 結果保存 CSV
-$result_path = Pathname.new("mobs") + "tmp.csv"
+$clean_names = false
 
 UNKNOWN = "★不明"
 
+# スキップする mob 名
 # 基本的に1つの mob 欄に複数の値が入っているものは解析失敗する
 $skip_mobs = ["ゴースト", "サルファーゴーレム", "スモールゴーレム(初級)", "スモールゴーレム", 
               "スモールゴーレム(強化)"]
 
-$debug = true
+$input_dir = Pathname.new("mobs")
+
+# 入力ファイル名
+$input_files = [
+                # "節足動物ＭＯＢＤＢ 1_1Tf.csv",
+                # "鳥類ＭＯＢＤＢ 1_1Tf.csv",
+                "アンデッド.csv",
+                "ストーン系.csv",
+                "ボスモンスター.csv",
+                "亜人種.csv",
+                "哺乳類.csv",
+                "影世界.csv",
+                "悪魔族.csv",
+                "爬虫類.csv",
+                "魔法生命体.csv"
+               ]
+
+# 入力
+$input = ConcatFilter.new($input_files.map {|a| CsvReader.new($input_dir + a, $input_columns)})
+
+# 出力
+$output = CsvWriter.new $input_dir + "tmp2.csv", $output_columns, $output_columns
 
 # ----------------------------------------------------------------------
 # 名称リスト
@@ -57,8 +154,6 @@ $names_list.each {|n| $names_hash[n] = Names.new($names_dir + "#{n}.csv")}
 
 # ----------------------------------------------------------------------
 # フィルタ
-
-require "filter"
 
 # 基本的な正規化を行う
 # - 記号と英数字を全角 => 半角
@@ -321,60 +416,6 @@ $mob_filter = FilterBuilder.new.
 # ----------------------------------------------------------------------
 # CSV
 
-# カラム名の配列(CSV の順に並んでいる)
-$input_columns = [
-            :family,
-            :name,
-            :fields,
-            :dungeons,
-            :life,
-            :attack,
-            :gold,
-            :is_1for1,
-            :defensive,
-            :num_of_attacks,
-            :search_range,
-            :protective,
-            :move_speed,
-            :is_first_attack,
-            :search_speed,
-            :skills,
-            :exp,
-            :items,
-            :elemental,
-            :tactics,
-            :information,
-            :titles,
-            :sketch_exp
-           ]
-
-$output_columns = [
-                   :family,
-                   :name,
-                   :fields,
-                   :dungeons,
-                   :life,
-                   :attack_min,
-                   :attack_max,
-                   :gold,
-                   :is_1for1,
-                   :defensive,
-                   :num_of_attacks,
-                   :search_range,
-                   :protective,
-                   :move_speed,
-                   :is_first_attack,
-                   :search_speed,
-                   :skills,
-                   :exp,
-                   :party_exp,
-                   :items,
-                   :elemental,
-                   :tactics,
-                   :information,
-                   :titles,
-                   :sketch_exp
-                  ]
 
 # ----------------------------------------------------------------------
 # デバッグ
@@ -404,32 +445,7 @@ end
 # ----------------------------------------------------------------------
 # 実行！
 
-# デバッグ用に加工前データも出力する
-if $debug
-  tmp = []
-  for column in $output_columns
-    case column
-    when :name, :family, :party_exp, :attack_max
-      # 加工しないので加工前はいらない
-      tmp << column
-    when :attack_max
-      # 無視
-    when :attack_min
-      tmp << :"attack(加工前)"
-      tmp << :attack_min
-    else
-      tmp << :"#{column}(加工前)"
-      tmp << column
-    end
-  end
-  $output_columns = tmp
-end
-
-require "my_csv"
-input = CsvReader.new $source_path, $input_columns
-output = CsvWriter.new $result_path, $output_columns, $output_columns
-
-filters = ListFilter.new [input, BackupFilter.new, Logger.new([:name]), $mob_filter, Logger.new([:dungeons]), output]
+filters = ListFilter.new [$input, BackupFilter.new, Logger.new([:name]), $mob_filter, Logger.new([:dungeons]), $output]
 
 while true
   begin
