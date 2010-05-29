@@ -283,6 +283,8 @@ class MobFilter < ListFilter
       column(:exp, [exp]).
       
       column(:items, [split_items,
+                      expand(/(型紙\()(.*)(\))/),
+                      expand(/(.*魔族通行証\()(.*)(\))/),
                       expand(/(['`])(.*)(['`]音の空き瓶.*)/),
                       expand(/(ファーストエイド)(.*)()/),
                       expand(/(.*ポーション)(.*)()/),
