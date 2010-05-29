@@ -110,7 +110,7 @@ class NameFilter < ValueFilter
 end
 
 # 正規表現で指定された文字列を削除する
-class RemoveFilter
+class RemoveFilter < ValueFilter
   # words は正規表現の配列
   def initialize(words)
     @words = Array(words)
@@ -125,7 +125,7 @@ class RemoveFilter
 end
 
 # 指定された文字列を別の文字列に置き換える
-class GsubFilter
+class GsubFilter < ValueFilter
   def initialize(pattern, replace)
     @pattern = pattern
     @replace = replace
@@ -187,7 +187,7 @@ end
 
 # NumberFilter の結果を max のみに変換する
 # 不明な場合は UNKNOWN
-class MaxFilter
+class MaxFilter < ValueFilter
   def process(value, options)
     raise "value" unless value
     value[:max] || UNKNOWN
@@ -195,7 +195,7 @@ class MaxFilter
 end
 
 # NumberFilter の結果をそれぞれのカラムに格納する
-class MinMaxFilter
+class MinMaxFilter < ValueFilter
   def initialize(min_column, max_column)
     @min_column = min_column
     @max_column = max_column
@@ -231,7 +231,7 @@ class ExpFilter < ValueFilter
 end
 
 # ベース/サンライト/マナハーブ みたいなのを分解する
-class SuffixFilter
+class SuffixFilter < ValueFilter
   def initialize(suffix)
     @suffix = suffix
   end

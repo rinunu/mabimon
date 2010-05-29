@@ -7,6 +7,12 @@ end
 #
 # object を加工する
 class Filter
+  
+  # すべてのデータを処理後に呼ばれる
+  # 後始末を行うために使用する
+  def close()
+  end
+
   # object にフィルターを適用して返す
   # object 自体を変更して返す場合も、複製を返す場合もある
   # 処理するものがなかった場合は nil を返す
@@ -34,6 +40,10 @@ class ListFilter < Filter
     end
     object
   end
+
+  def close()
+    @filters.each {|f| f.close}
+  end
 end
 
 # カラムに ValueFilter を適用する
@@ -54,6 +64,12 @@ class ColumnFilter < Filter
     end
     object
   end
+
+  def close()
+    @filter.close
+  end
+  
+  private
 
   def process_column(object, column)
     options = {:object => object, :column => column}
@@ -76,6 +92,9 @@ end
 
 # 値を加工する
 class ValueFilter
+  def close()
+  end
+
   # value を加工して返す
   # 配列を返した場合、カラムには配列が入る
   # カラムが配列の場合、 nil を返すと配列から取り除かれる
@@ -113,6 +132,7 @@ class FilterRunner
       rescue Skip
       end
     end
+    filter.close
   end
 end
 

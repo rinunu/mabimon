@@ -129,7 +129,7 @@ $output = CsvWriter.new $input_dir + "tmp2.csv", $output_columns, $output_column
 # デバッグ
 
 # 各カラムの編集前の値を複製して保存しておく(比較用)
-class BackupFilter
+class BackupFilter < Filter
   def process(object)
     result = {}
     for key, value in object
@@ -140,7 +140,7 @@ class BackupFilter
   end
 end
 
-class Logger
+class Logger < Filter
   def initialize(columns)
     @columns = Array(columns)
   end
