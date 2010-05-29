@@ -259,6 +259,7 @@ class MobFilter < ListFilter
      :fields,
      :dungeons,
      :items,
+     :skills,
     ].each do |column|
       builder.column column, ReplaceFilter.new(names_dir + "#{column}_replace.csv")
     end
