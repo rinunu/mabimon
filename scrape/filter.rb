@@ -17,12 +17,13 @@ class Filter
 end
 
 # 複数の Filter を適用する Filter
-class ListFilter
+class ListFilter < Filter
   def initialize(filters = [])
     @filters = Array(filters)
   end
 
   def add(filter)
+    raise 'filter' unless filter.is_a? Filter
     @filters << filter
   end
   
@@ -37,7 +38,7 @@ end
 
 # カラムに ValueFilter を適用する
 # 継承して使用する
-class ColumnFilter
+class ColumnFilter < Filter
   # columns に対象のカラムを指定する。 [] ならすべて。
   def initialize(filter, columns = [])
     raise "filter" unless filter
@@ -85,7 +86,7 @@ end
 # ----------------------------------------------------------------------
 
 # 複数の入力用フィルターを連結する
-class ConcatFilter
+class ConcatFilter < Filter
   def initialize(sources)
     @sources = Array(sources)
   end
@@ -119,11 +120,12 @@ end
 
 # ListFilter を作成するユーティリティクラス
 class FilterBuilder
-  def initialize()
-    @list_filter = ListFilter.new
+  def initialize(list_filter)
+    @list_filter = list_filter
   end
 
   def filter(filter)
+    raise "filter" unless filter.is_a? Filter
     @list_filter.add filter
     self
   end
