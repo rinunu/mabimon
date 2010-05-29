@@ -10,34 +10,15 @@ UNKNOWN = "★不明"
 class BasicFilter < ValueFilter
   def process(value, options)
     raise "value: #{options[:column]}" unless value
-    value.tr("：０-９Ａ-Ｚａ-ｚ（）？　／－−", ":0-9A-Za-z()? /ーー").gsub("??", "?").
+    value.tr("`：０-９Ａ-Ｚａ-ｚ（）？　／－−", "':0-9A-Za-z()? /ーー").gsub("??", "?").
       gsub(/[～〜]/, "~").
       gsub("(?)", "?").strip
   end
 end
 
-# あいう(A, B, C) を あいう(A), あいう(B), あいう(C) というリストに変換する
-# この処理を行う前に SplitFilter していること
-class ParenthesesFilter < ValueFilter
-  def initialize()
-  end
-
-  def process(value, options)
-    # カッコの中身を抜き出す
-    if /(.+?)\((.+?)\)/ =~ value
-      prefix = $1
-      list = $2.split(",")
-      if list.size >= 2
-        return list.map{|a| prefix + a}
-      end
-    end
-    value
-  end
-end
-
 # あ,い,う を 「あ」「い」「う」に分解し、リストに変換する
-# ただし () でくくられているものは分解しない
-# また、区切り文字を正規化し、 「,」のみにする
+# 
+# - ()や '' でくくられているものは分解しない
 class SplitFilter < ValueFilter
   def initialize(separator = /[、,，\n・\/]\s*/)
     @separator = separator
@@ -46,10 +27,14 @@ class SplitFilter < ValueFilter
   def process(value, options)
     # もっと素直にできないかな。。
     
-    # すべての区切りを <sep> にする
     value = value.gsub(@separator, "<sep>")
-    # () に囲まれた 「<sep>」 は「,」に戻す
-    value = value.gsub(/<sep>(?=[^()]*\))/, ',')
+
+    # 区切るべきではないものをエスケープする
+    # () etc. に囲まれた <sep>
+    value = value.gsub(/(\(.*?\))/){|a| a.gsub('<sep>', '/')}
+    value = value.gsub(/('.*?')/){|a| a.gsub('<sep>', '/')}
+    value = value.gsub(/(`.*?`)/){|a| a.gsub('<sep>', '/')}
+    
     value.split("<sep>")
   end
 end
@@ -258,9 +243,8 @@ class MobFilter < ListFilter
     names_dir = Pathname.new("names")
     
     split = SplitFilter.new
-    split_space = SplitFilter.new(/[、,，\s・\/]\s*/) # スペースでも名前を分割する
-    split_items = SplitFilter.new(/[、,，\n・]\s*/)
-    paren = ParenthesesFilter.new
+    split_space = SplitFilter.new(/[、,，\s・\/]\s*/) # スペースでも分割する
+    split_items = SplitFilter.new(/[、,，\n・]\s*/) # アイテムは / で分割しない
     number = NumberFilter.new
     max = MaxFilter.new
     exp = ExpFilter.new
@@ -284,8 +268,12 @@ class MobFilter < ListFilter
              # たまに入ってる英語名称を削除
              [gsub(/\([a-zA-Z ]+\)$/, "")]).
       
-      column(:fields, [split_space, paren]).
-      column(:dungeons, [split, paren]).
+      column(:fields, [split_space,
+                       expand(/(.*?\()(.*)(\))/),
+                      ]).
+      column(:dungeons, [split,
+                         expand(/(.*?\()(.*)(\))/),
+                        ]).
       column(:life, [number, max]).
       column(:attack, [number, min_max(:attack_min, :attack_max)]).
       column(:gold, [remove(/[gｇＧ]/i), number, max]).
@@ -294,12 +282,11 @@ class MobFilter < ListFilter
       column(:skills, [split_space]).
       column(:exp, [exp]).
       
-      # エンチャなどがあるので paren はすべきじゃない
-      column(:items, [gsub(/['`"](.+?)['`"]音の空き瓶/, '音の空き瓶(\1)'),
-                      split_items,
-                      expand(/(ファーストエイド)(.*)()$/),
-                      expand(/(.*ポーション)(.*)()$/),
-                      expand(/()(.*)(ポーション.*)$/),
+      column(:items, [split_items,
+                      expand(/(['`])(.*)(['`]音の空き瓶.*)/),
+                      expand(/(ファーストエイド)(.*)()/),
+                      expand(/(.*ポーション)(.*)()/),
+                      expand(/()(.*)(ポーション.*)/),
                       expand(/()(.*)(エレメンタル)$/),
                       expand(/()(.*)(ハーブ)$/),
                       expand(/^(小さ[いな])(.*)(の玉)$/),
@@ -310,7 +297,7 @@ class MobFilter < ListFilter
                       expand(/()(.*)(板)$/),
                       expand(/(.*?)([0-9\/]+)(ページ)$/),
                       expand(/(.*)(爪\/毛)()$/),
-                      expand(/()(.*?)(インゴット.*)$/),
+                      expand(/()(.*?)(インゴット.*)/),
                      ]).
       column(:titles, []).
       column(:sketch_exp, [])
