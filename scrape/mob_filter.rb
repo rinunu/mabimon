@@ -30,6 +30,8 @@ $names_list = [
 $names_hash = {}
 $names_list.each {|n| $names_hash[n] = Names.new($names_dir + "#{n}.csv")}
 
+# split
+
 # ----------------------------------------------------------------------
 # フィルタ
 
@@ -85,22 +87,25 @@ end
 
 # 名前を統一するためのフィルタ
 # Names に存在するものはその正式名、存在しないものは Names に追加した上で出力する
+# Names がない場合は何もしない
 class NameFilter < ValueFilter
-  def initialize(names)
-    raise "names" unless names
-    @names = names
+  def initialize(names_hash)
+    raise "names_hash" unless names_hash.is_a? Hash
+    @names_hash = names_hash
   end
 
   def process(value, options)
-    raise "value" unless value
-    names = @names.get_standard_names value
-    unless names
+    names = @names_hash[options[:column]]
+    return value unless names
+    
+    values = names.get_standard_names value
+    unless values
       @names.add value
       return value
     end
 
-    return nil if names.empty?
-    return names
+    return nil if values.empty?
+    return values
   end
 end
 
@@ -269,34 +274,35 @@ class MobFilter < ListFilter
              # たまに入ってる英語名称を削除
              [gsub(/\([a-zA-Z ]+\)$/, "")]).
       
-      column(:fields, [remove(/^期間：.*/), split_space, paren, names(:fields)]).
-      column(:dungeons, [remove(/^期間：.*/), split, paren, names(:dungeons)]).
+      column(:fields, [remove(/^期間：.*/), split_space, paren]).
+      column(:dungeons, [remove(/^期間：.*/), split, paren]).
       column(:life, [number, max]).
       column(:attack, [number, min_max(:attack_min, :attack_max)]).
       column(:gold, [remove(/[gｇＧ]/i), number, max]).
-      column(:is_1for1, [names(:is_1for1)]).
+      column(:is_1for1, []).
       column(:defensive, [number, max]).
-      column(:num_of_attacks, [names(:num_of_attacks)]).
-      column(:search_range, [names(:search_range)]).
+      column(:num_of_attacks, []).
+      column(:search_range, []).
       column(:protective, [number, max]).
-      column(:move_speed, [names(:move_speed)]).
-      column(:is_first_attack, [names(:is_first_attack)]).
-      column(:search_speed, [names(:search_speed)]).
-      column(:skills, [split_space, names(:skills)]).
+      column(:move_speed, []).
+      column(:is_first_attack, []).
+      column(:search_speed, []).
+      column(:skills, [split_space]).
       column(:exp, [exp]).
       
       # エンチャなどがあるので paren はすべきじゃない
       column(:items, [gsub(/['`"](.+?)['`"]音の空き瓶/, '音の空き瓶(\1)'),
-                      split_items, herb, elemental, names(:items)]).
-      column(:elemental, [names(:elemental)]).
+                      split_items, herb, elemental]).
+      column(:elemental, []).
       column(:tactics, []).
       column(:information, []).
       column(:titles, []).
-      column(:sketch_exp, [])
+      column(:sketch_exp, []).
+      
+      all_columns(NameFilter.new($names_hash))
   end
 
   private
-  def names(column) NameFilter.new($names_hash[column]) end
   def gsub(pattern, replace) GsubFilter.new(pattern, replace) end
   def remove(pattern) RemoveFilter.new(pattern) end
   def min_max(min_column, max_column) MinMaxFilter.new(min_column, max_column) end
