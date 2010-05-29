@@ -4,44 +4,13 @@ require "filter"
 
 UNKNOWN = "★不明"
 
-# ----------------------------------------------------------------------
-# 名称リスト
-#
-# $names_dir にある「名称リスト.csv」に名前情報を持っているものたち
-
-require "names"
-
-$names_dir = Pathname.new("names")
-
-$names_list = [
-  :fields,
-  :dungeons,
-  :is_1for1,
-  :num_of_attacks,
-  :search_range,
-  :move_speed,
-  :is_first_attack,
-  :search_speed,
-  :skills,
-  :items,
-  :elemental
-]
-
-$names_hash = {}
-$names_list.each {|n| $names_hash[n] = Names.new($names_dir + "#{n}.csv")}
-
-# split
-
-# ----------------------------------------------------------------------
-# フィルタ
-
 # 基本的な正規化を行う
 # - 記号と英数字を全角 => 半角
 # - 前後のスペースを削除
 class BasicFilter < ValueFilter
   def process(value, options)
     raise "value: #{options[:column]}" unless value
-    value.tr("（）？　／－", "()? /ー").gsub("??", "?").
+    value.tr("：０-９Ａ-Ｚａ-ｚ（）？　／－−", ":0-9A-Za-z()? /ーー").gsub("??", "?").
       gsub(/[～〜]/, "~").
       gsub("(?)", "?").strip
   end
@@ -85,20 +54,47 @@ class SplitFilter < ValueFilter
   end
 end
 
-# 名前を統一するためのフィルタ
-# Names に存在するものはその正式名、存在しないものは Names に追加した上で出力する
-# Names がない場合は何もしない
-class NameFilter < ValueFilter
-  def initialize(names_hash)
-    raise "names_hash" unless names_hash.is_a? Hash
-    @names_hash = names_hash
+# ファイルに記述された設定をもとに、置換を行うフィルタ
+# ファイルフォーマットは CSV。
+# 1レコードの先頭カラムが置換後の文字列、それ以降のカラムは置換前文字列
+class ReplaceFilter < ValueFilter
+  def initialize(path)
+    raise "path" unless path
+    @path = path
+    @hash = {}
+    require "csv"
+    CSV.open(@path, 'r') do |row|
+      next unless row.size >= 2
+      after = row.shift
+      for before in row
+        before = Regexp.new before
+        @hash[before] = after
+      end
+    end
   end
 
   def process(value, options)
-    names = @names_hash[options[:column]]
-    return value unless names
-    
-    values = names.get_standard_names value
+    for before, after in @hash
+      value = value.gsub(before, after)
+    end
+    value
+  end
+end
+
+# 名前を統一するためのフィルタ
+# Names に存在するものはその正式名、存在しないものは Names に追加した上で出力する
+class NameFilter < ValueFilter
+  def initialize(path)
+    require "names"
+    @names = Names.new path
+  end
+
+  def close()
+    @names.save :clean => true
+  end
+
+  def process(value, options)
+    values = @names.get_standard_names value
     unless values
       @names.add value
       return value
@@ -108,6 +104,7 @@ class NameFilter < ValueFilter
     return values
   end
 end
+
 
 # 正規表現で指定された文字列を削除する
 class RemoveFilter < ValueFilter
@@ -171,6 +168,7 @@ class NumberFilter < ValueFilter
   end
 end
 
+# 指定された Mob をスキップする
 class SkipMobsFilter < Filter
   def initialize(skip_mobs)
     @skip_mobs = skip_mobs
@@ -230,81 +228,119 @@ class ExpFilter < ValueFilter
   end
 end
 
-# ベース/サンライト/マナハーブ みたいなのを分解する
-class SuffixFilter < ValueFilter
-  def initialize(suffix)
-    @suffix = suffix
+# ベース/サンライト/マナハーブ みたいなのを展開する
+class ExpandFilter < ValueFilter
+  # pattern は「(prefix)(展開部)(suffix)」の形になっている必要がある
+  # 展開部は / で分解され、それぞれの前後に prefix, suffix が負荷される
+  def initialize(pattern)
+    @pattern = pattern
   end
   
   def process(value, options)
     raise "value" unless value
-    if value =~ /^(.*)#@suffix$/
-      value.split("/").map do |a|
-        if a.include? @suffix
-          a
-        else
-          a + @suffix
-        end
+    if value =~ @pattern
+      prefix = $1
+      suffix = $3
+      values = $2.split("/")
+      if values.size >= 2
+        return values.map {|a| prefix + a + suffix}
       end
-    else
-      value
     end
-  end  
+    value
+  end
 end
 
+# Mob 情報を加工する
 class MobFilter < ListFilter
   def initialize(options)
     super()
+
+    names_dir = Pathname.new("names")
     
     split = SplitFilter.new
     split_space = SplitFilter.new(/[、,，\s・\/]\s*/) # スペースでも名前を分割する
     split_items = SplitFilter.new(/[、,，\n・]\s*/)
     paren = ParenthesesFilter.new
     number = NumberFilter.new
-    herb = SuffixFilter.new("ハーブ")
-    elemental = SuffixFilter.new("エレメンタル")
     max = MaxFilter.new
     exp = ExpFilter.new
-    
-    FilterBuilder.new(self).
+
+    builder = FilterBuilder.new(self)
+    builder.
       filter(SkipMobsFilter.new(options[:skip_mobs])).
-      all_columns(BasicFilter.new).
-      
+      all_columns(BasicFilter.new)
+
+    # ReplaceFilter
+    [
+     :fields,
+     :dungeons,
+     :items,
+    ].each do |column|
+      builder.column column, ReplaceFilter.new(names_dir + "#{column}_replace.csv")
+    end
+    
+    builder.
       column(:name,
              # たまに入ってる英語名称を削除
              [gsub(/\([a-zA-Z ]+\)$/, "")]).
       
-      column(:fields, [remove(/^期間：.*/), split_space, paren]).
-      column(:dungeons, [remove(/^期間：.*/), split, paren]).
+      column(:fields, [split_space, paren]).
+      column(:dungeons, [split, paren]).
       column(:life, [number, max]).
       column(:attack, [number, min_max(:attack_min, :attack_max)]).
       column(:gold, [remove(/[gｇＧ]/i), number, max]).
-      column(:is_1for1, []).
       column(:defensive, [number, max]).
-      column(:num_of_attacks, []).
-      column(:search_range, []).
       column(:protective, [number, max]).
-      column(:move_speed, []).
-      column(:is_first_attack, []).
-      column(:search_speed, []).
       column(:skills, [split_space]).
       column(:exp, [exp]).
       
       # エンチャなどがあるので paren はすべきじゃない
       column(:items, [gsub(/['`"](.+?)['`"]音の空き瓶/, '音の空き瓶(\1)'),
-                      split_items, herb, elemental]).
-      column(:elemental, []).
-      column(:tactics, []).
-      column(:information, []).
+                      split_items,
+                      expand(/(ファーストエイド)(.*)()$/),
+                      expand(/(.*ポーション)(.*)()$/),
+                      expand(/()(.*)(ポーション.*)$/),
+                      expand(/()(.*)(エレメンタル)$/),
+                      expand(/()(.*)(ハーブ)$/),
+                      expand(/^(小さ[いな])(.*)(の玉)$/),
+                      expand(/(.*\()(♂\/♀)(\).*)/),
+                      expand(/(.*\()(男性用\/女性用)(\).*)/),
+                      expand(/()(.*)(革)$/),
+                      expand(/()(.*)(鉱)$/),
+                      expand(/()(.*)(板)$/),
+                      expand(/(.*?)([0-9\/]+)(ページ)$/),
+                      expand(/(.*)(爪\/毛)()$/),
+                      expand(/()(.*?)(インゴット.*)$/),
+                     ]).
       column(:titles, []).
-      column(:sketch_exp, []).
-      
-      all_columns(NameFilter.new($names_hash))
+      column(:sketch_exp, [])
+    
+    # NameFilter
+
+    names_list = [
+                   :fields,
+                   :dungeons,
+                   :is_1for1,
+                   :num_of_attacks,
+                   :search_range,
+                   :move_speed,
+                   :is_first_attack,
+                   :search_speed,
+                   :skills,
+                   :items,
+                   :elemental
+                  ]
+    
+    names_list.each do |column|
+      builder.column column, NameFilter.new(names_dir + "#{column}.csv")
+    end
+    
   end
 
   private
   def gsub(pattern, replace) GsubFilter.new(pattern, replace) end
   def remove(pattern) RemoveFilter.new(pattern) end
   def min_max(min_column, max_column) MinMaxFilter.new(min_column, max_column) end
+  def expand(pattern) ExpandFilter.new(pattern) end
 
 end

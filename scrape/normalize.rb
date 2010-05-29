@@ -94,9 +94,6 @@ if $debug
   $output_columns = tmp
 end
 
-# 名称リストから未使用の名称を削除するなら true
-$clean_names = false
-
 # スキップする mob 名
 # 基本的に1つの mob 欄に複数の値が入っているものは解析失敗する
 $skip_mobs = ["ゴースト", "サルファーゴーレム", "スモールゴーレム(初級)", "スモールゴーレム", 
@@ -157,10 +154,6 @@ filters = ListFilter.new [$input,
                           BackupFilter.new,
                           Logger.new([:name]),
                           MobFilter.new(:skip_mobs => $skip_mobs),
-                          Logger.new([:dungeons]),
                           $output]
 
 FilterRunner.new.run filters
-
-# 名称リストを更新する
-$names_hash.values.each {|a|a.save(:clean => $clean_names)}
