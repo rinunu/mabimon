@@ -34,13 +34,18 @@ class CsvWriter
   def initialize(path, header, columns)
     @columns = columns
     require "csv"
-    require "kconv"
-    @writer = CSV.open(path, 'w')
+    @path = path
+    @result = ""
+    @writer = CSV::Writer.create(@result)
     @writer << header.map {|a| a.to_s}
   end
 
   def close()
+    require "kconv"
     @writer.close
+    open(@path, 'w') do |f|
+      f.write @result.tosjis
+    end
   end
   
   # 1件書き込む
